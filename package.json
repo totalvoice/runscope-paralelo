@@ -1,0 +1,12 @@
+{
+  "name": "runscope-testes-paralelos",
+  "version": "1.0.0",
+  "description": "Executa testes paralelamente no Runscope",
+  "main": "index.js",
+  "author": "Guilherme Nunes & Diego Wagner",
+  "license": "MIT",
+  "dependencies": {
+    "async": "^2.6.0",
+    "request": "^2.86.0"
+  }
+}
