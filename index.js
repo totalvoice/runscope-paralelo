@@ -7,6 +7,9 @@ let testsIds = [];
 let key = '';
 let readingTests = false;
 
+// Armazena cada verificação de URL para respeitar um limite de novas tentativas.
+const verificationCounter = new Map();
+
 // Carrega os argumentos
 for (let i = 2; i < args.length; i++) {
     if(args[i] === '-env') {
@@ -101,6 +104,30 @@ function verifyTest(test_url) {
                     throw Error("ASSERTION FAILED");
                 } else {
                     console.log("SUCESSO!");
+                }
+            }
+        }
+        else if(error && res.statusCode == 404) {
+            //Faz uma nova tentativa em caso de 404 para evitar delays de resposta do runscope
+            if(verificationCounter.has(test_url)) {
+                const SECONDS_UNTIL_RETRY = 10000;
+
+                let numberOfAttempsMade = verificationCounter.get(test_url);
+                if(isNaN(numberOfAttempsMade)) {
+                    numberOfAttempsMade = 1;
+                }
+                else {
+                    verificationCounter.set(test_url, ++numberOfAttempsMade) 
+                }
+
+                if(numberOfAttempsMade < 3) {
+                    console.log(`Erro 404: Nova tentativa em ${SECONDS_UNTIL_RETRY} para teste: ${test_url}`);
+                    setTimeout(() => {
+                        verifyTest(test_url);
+                    }, SECONDS_UNTIL_RETRY);
+                }
+                else {
+                    throw Error(`Número máximo de tentativas atingidas: ${body}`);
                 }
             }
         } else {
