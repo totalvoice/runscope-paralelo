@@ -6,7 +6,7 @@
   "author": "Guilherme Nunes & Diego Wagner",
   "license": "MIT",
   "dependencies": {
-    "async": "^2.6.0",
-    "request": "^2.86.0"
+    "axios": "^0.19.2",
+    "columnify": "^1.5.4"
   }
 }
