@@ -48,34 +48,66 @@ async function fetchTestListFronRunscope() {
     let noRemainingTestsToFetch = false;
     let nextOffsetToFetch = 0;
     while(noRemainingTestsToFetch == false) {
-        const testListResponse = await axios.get(`https://api.runscope.com/buckets/${bucketKey}/tests?offset=${nextOffsetToFetch}`, {
-            headers: {
-                'Authorization': `Bearer ${runscopeApiKey}`
-            }
-        });
-        const partialTestList = testListResponse.data.data;
-        for(let test of partialTestList) {
-            let regexMatches = triggerUrlRegex.exec(test.trigger_url);
-            if(regexMatches == null)
-                throw Error(`Error extracting trigger ID from URL: ${test.trigger_url}`);
-            const testId = regexMatches[1];
+        let runscopeAttempts = 0;
+        let testListFetchedWithSuccess = false;
+        while(testListFetchedWithSuccess == false && runscopeAttempts < 3) {
+            try {
+                runscopeAttempts ++;
 
-            // Ignore tests with [IGNORED] prefix in name
-            if(test.name.startsWith(`[IGNORED]`)) {
-                ignoredTestsCount ++;
-                console.log(`⚠ Test ignored, name: ${test.name}, testId; ${testId}`);
-                continue;
-            }
+                const testListResponse = await axios.get(`https://api.runscope.com/buckets/${bucketKey}/tests?offset=${nextOffsetToFetch}`, {
+                    headers: {
+                        'Authorization': `Bearer ${runscopeApiKey}`
+                    },
+                    validateStatus: () => true,
+                });
+                
+                if(testListResponse.status != 200) {
+                    // Not Found, so testList end reached
+                    if(testListResponse.status == 404) { 
+                        console.log("Runscope API Test list end reached.");
+                        noRemainingTestsToFetch = true;
+                        continue;
+                    }
+                } else {
+                    const partialTestList = testListResponse.data.data;
+                    for(let test of partialTestList) {
+                        let regexMatches = triggerUrlRegex.exec(test.trigger_url);
+                        if(regexMatches == null) {
+                            const errorString = `Error extracting trigger ID from URL: ${test.trigger_url}`;
+                            console.log(errorString);
+                            throw new Error(errorString);
+                        }
+                            
+                        const testId = regexMatches[1];
 
-            runnableTestsCount ++;
-            testList.push(testId);
+                        // Ignore tests with [IGNORED] prefix in name
+                        if(test.name.startsWith(`[IGNORED]`)) {
+                            ignoredTestsCount ++;
+                            console.log(`⚠ Test ignored, name: ${test.name}, testId; ${testId}`);
+                            continue;
+                        }
+
+                        runnableTestsCount ++;
+                        testList.push(testId);
+                    }
+                    if(partialTestList.length == 0)
+                        noRemainingTestsToFetch = true;
+                    else
+                        nextOffsetToFetch += partialTestList.length;
+                    await sleep(INTERVAL_BETWEEN_FETCH_TESTS_IDS_FROM_RUNSCOPE_IN_MS);
+                    testListFetchedWithSuccess = true;
+                }
+            }
+            catch(ex) {
+                console.log(`An error ocurred when fetching Runscope API Test List, Attempts: ${runscopeAttempts}/3`);
+            }
         }
-        if(partialTestList.length == 0)
-            noRemainingTestsToFetch = true;
-        else
-            nextOffsetToFetch += partialTestList.length;
-        await sleep(INTERVAL_BETWEEN_FETCH_TESTS_IDS_FROM_RUNSCOPE_IN_MS);
+        if(testListFetchedWithSuccess == false && noRemainingTestsToFetch == false) {
+            console.log(`❌ ERROR: failed to fetch test list from Runscope API`);
+            process.exit(1);
+        }
     }
+
     console.log(`Test list fetched, total: ${runnableTestsCount + ignoredTestsCount}, runnable: ${runnableTestsCount}, ignored: ${ignoredTestsCount}`);
     return testList;    
 }
