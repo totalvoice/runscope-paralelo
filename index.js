@@ -71,27 +71,30 @@ async function fetchTestListFronRunscope() {
                     }
                 } else {
                     const partialTestList = testListResponse.data.data;
-                    for(let test of partialTestList) {
-                        let regexMatches = triggerUrlRegex.exec(test.trigger_url);
-                        if(regexMatches == null) {
-                            const errorString = `Error extracting trigger ID from URL: ${test.trigger_url}`;
-                            console.log(errorString);
-                            throw new Error(errorString);
+                    if(partialTestList instanceof Array == true) {
+                        for(let test of partialTestList) {
+                            let regexMatches = triggerUrlRegex.exec(test.trigger_url);
+                            if(regexMatches == null) {
+                                const errorString = `Error extracting trigger ID from URL: ${test.trigger_url}`;
+                                console.log(errorString);
+                                throw new Error(errorString);
+                            }
+                                
+                            const testId = regexMatches[1];
+    
+                            // Ignore tests with [IGNORED] prefix in name
+                            if(test.name.startsWith(`[IGNORED]`)) {
+                                ignoredTestsCount ++;
+                                console.log(`⚠ Test ignored, name: ${test.name}, testId; ${testId}`);
+                                continue;
+                            }
+    
+                            runnableTestsCount ++;
+                            testList.push(testId);
                         }
-                            
-                        const testId = regexMatches[1];
-
-                        // Ignore tests with [IGNORED] prefix in name
-                        if(test.name.startsWith(`[IGNORED]`)) {
-                            ignoredTestsCount ++;
-                            console.log(`⚠ Test ignored, name: ${test.name}, testId; ${testId}`);
-                            continue;
-                        }
-
-                        runnableTestsCount ++;
-                        testList.push(testId);
                     }
-                    if(partialTestList.length == 0)
+                    
+                    if(partialTestList instanceof Array == false || (partialTestList instanceof Array == true && partialTestList.length == 0))
                         noRemainingTestsToFetch = true;
                     else
                         nextOffsetToFetch += partialTestList.length;
