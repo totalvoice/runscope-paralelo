@@ -5,6 +5,7 @@ const MAXIMUM_TESTS_PER_BATCH = 10;
 const MINIMUM_INTERVAL_BETWEEN_BATCH_EXECUTION_IN_MS = (10 * 1000);
 const INTERVAL_BETWEEN_TEST_VERIFICATIONS_IN_MS = (10 * 1000);
 const INTERVAL_BETWEEN_FETCH_TESTS_IDS_FROM_RUNSCOPE_IN_MS = (2 * 1000);
+const INTERVAL_BETWEEN_TEST_VERIFICATION_RETRY = 3000;
 
 let bucketKey = '';
 let environmentId = '';
@@ -299,19 +300,24 @@ function startVerificationOnTests(runningTestIds) {
                 console.log(`\nWaiting to finish ${notFinishedTests.length} tests of ${runningTestIds.length}\n`);
 
             for(let notFinishedTest of notFinishedTests) {
-                console.log(`Verifying test ${testNames[notFinishedTest.testId]}, result: https://www.runscope.com/radar/${bucketKey}/${notFinishedTest.triggeredTestId}/history/${notFinishedTest.testRunId}`);
-                await axios.get(`https://api.runscope.com/buckets/${bucketKey}/tests/${notFinishedTest.triggeredTestId}/results/${notFinishedTest.testRunId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${runscopeApiKey}`
-                    }
-                }).then(value => {
-                    if(value.status == 200 && value.data.data.finished_at != null) {
-                        finishedTestIds.push(notFinishedTest);
-                        finishedTestResults[`${notFinishedTest.triggeredTestId}_${notFinishedTest.testRunId}`] = { testId: notFinishedTest.testId, runscopeData: value.data.data };
-                    }
-                }).catch(reason => {
-                    throw Error(`Error when reading test result for ${testNames[notFinishedTest.testId]} test, reason: ${JSON.stringify(reason)}`);
-                });
+                let testAlreadyVerified = false;
+                for(let retries = 5; testAlreadyVerified == false && retries > 0; retries --) {
+                    console.log(`Verifying test ${testNames[notFinishedTest.testId]}, result: https://www.runscope.com/radar/${bucketKey}/${notFinishedTest.triggeredTestId}/history/${notFinishedTest.testRunId}`);
+                    await axios.get(`https://api.runscope.com/buckets/${bucketKey}/tests/${notFinishedTest.triggeredTestId}/results/${notFinishedTest.testRunId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${runscopeApiKey}`
+                        }
+                    }).then(value => {
+                        if(value.status == 200 && value.data.data.finished_at != null) {
+                            finishedTestIds.push(notFinishedTest);
+                            finishedTestResults[`${notFinishedTest.triggeredTestId}_${notFinishedTest.testRunId}`] = { testId: notFinishedTest.testId, runscopeData: value.data.data };
+                        }
+                    }).catch(async reason => {
+                        console.log(`Error when reading test result for ${testNames[notFinishedTest.testId]} test, reason: ${JSON.stringify(reason)}`);
+                        await sleep(INTERVAL_BETWEEN_TEST_VERIFICATION_RETRY);
+                    });
+                    testAlreadyVerified = true;
+                }
             }
             if(notFinishedTests.length == 0) {
                 clearInterval(intervalId);
